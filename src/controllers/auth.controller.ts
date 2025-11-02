@@ -6,12 +6,19 @@ import jwt from "jsonwebtoken";
 export const register = async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "Faltan campos: email, password y name son requeridos" });
+    }
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { email, password: hashed, name },
     });
-    res.json(user);
-  } catch (err) {
+    res.status(201).json(user);
+  } catch (err: any) {
+    console.error(err);
+    if (err?.code === "P2002") {
+      return res.status(400).json({ error: "El email ya está registrado" });
+    }
     res.status(400).json({ error: "Error al registrar usuario" });
   }
 };

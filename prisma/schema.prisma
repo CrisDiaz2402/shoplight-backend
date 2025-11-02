@@ -16,11 +16,16 @@ model User {
   updatedAt DateTime  @updatedAt
   // Fase 2
   orders    Order[]
+  /// Ventas / salidas de inventario hechas por el usuario
+  sales     Sale[]
 }
 
 model Product {
   id        Int       @id @default(autoincrement())
   name      String
+  stock     Int       @default(0)
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
   description String?
   price     Float
   imageUrl  String?
@@ -28,6 +33,8 @@ model Product {
   updatedAt DateTime  @updatedAt
   // Fase 2
   orderItems OrderItem[]
+  /// Registros de salida/ventas (kardex)
+  sales     Sale[]
 }
 
 ////// FASE 2 //////
@@ -50,4 +57,29 @@ model OrderItem {
   subtotal   Float
   order      Order     @relation(fields: [orderId], references: [id])
   product    Product   @relation(fields: [productId], references: [id])
+}
+
+/// Modelo para registrar ventas / salidas de inventario (kardex)
+model Sale {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  productId      Int
+  quantity       Int
+  amount         Float
+  paymentMethod  String
+  paymentDetails Json?
+  createdAt      DateTime  @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
 }
