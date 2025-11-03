@@ -2,8 +2,9 @@ import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 
 export const getProducts = async (req: Request, res: Response) => {
-  // incluir category si existe (casteamos resultado a any para evitar errores de tipos hasta regenerar Prisma Client)
-  const products = (await prisma.product.findMany({ include: { /* @ts-ignore */ category: true } as any })) as any;
+  // incluir category si existe y mantener un orden fijo: los más recientes primero (por createdAt)
+  // casteamos resultado a any para evitar errores de tipos hasta regenerar Prisma Client
+  const products = (await prisma.product.findMany({ include: { /* @ts-ignore */ category: true } as any, orderBy: { createdAt: 'desc' } })) as any;
   res.json(products);
 };
 
