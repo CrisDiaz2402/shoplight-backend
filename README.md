@@ -252,3 +252,96 @@ Si quieres, puedo generar los endpoints CRUD para `Category` y un endpoint para 
 
 ---
 Documentación generada automáticamente a partir del código fuente en `src/` y `prisma/schema.prisma`.
+---
+
+## ⚙️ Comandos principales
+
+### 🧹 **1. Reiniciar completamente la base de datos**
+
+```bash
+npx prisma migrate reset
+```
+
+**Descripción:**
+
+* Elimina **todas las tablas y datos** de la base de datos local.
+* Vuelve a aplicar todas las **migraciones** definidas en `/prisma/migrations/`.
+* Ejecuta automáticamente el **script de semilla (`prisma/seed.ts`)**, cargando los registros iniciales (usuarios, categorías, productos, etc.).
+
+**Uso recomendado:**
+
+> Cuando quieras **borrar todo y reiniciar desde cero** en tu entorno local.
+
+---
+
+### 💻 **2. Ejecutar en modo desarrollo**
+
+```bash
+npm run dev
+```
+
+**Descripción:**
+
+* Inicia el servidor con **`ts-node-dev`**, sin necesidad de compilar.
+* Detecta automáticamente cambios en el código y reinicia el servidor.
+* Ideal para **desarrollo local** y pruebas rápidas.
+
+**Uso recomendado:**
+
+> Durante el desarrollo o depuración del backend.
+
+---
+
+### 🚀 **3. Ejecutar en modo producción**
+
+```bash
+npm start
+```
+
+**Descripción:**
+
+* Primero aplica las migraciones pendientes y ejecuta el seed si es necesario:
+
+  ```bash
+  npx prisma migrate deploy && npx prisma db seed
+  ```
+* Luego inicia el servidor con la versión **compilada en `/dist`**:
+
+  ```bash
+  node dist/server.js
+  ```
+
+**Uso recomendado:**
+
+> En entornos de **producción o despliegue** (por ejemplo, en **AWS**, **Render**, o **Railway**).
+> Asegúrate de compilar antes con:
+>
+> ```bash
+> npm run build
+> ```
+
+---
+
+### 🔁 Flujo típico de desarrollo local
+
+```bash
+# 1. Resetear base de datos y cargar datos iniciales
+npx prisma migrate reset
+
+# 2. Iniciar servidor local en modo desarrollo
+npm run dev
+```
+
+---
+
+### 🌐 Flujo típico para despliegue (AWS / Render / Producción)
+
+```bash
+# 1. Compilar TypeScript
+npm run build
+
+# 2. Ejecutar en modo producción (usa migraciones y seed si aplica)
+npm start
+```
+
+---
