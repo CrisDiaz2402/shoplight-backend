@@ -1,19 +1,19 @@
 {
-  "compilerOptions": {
-    "target": "es2019",
-    "module": "commonjs",
-    "rootDir": "src",
-    "outDir": "dist",
-    "esModuleInterop": true,
-    "strict": true
-  },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "prisma",
-    "prisma.config.ts",
-    "public"
-  ]
+"compilerOptions": {
+"target": "es2019",
+"module": "commonjs",
+"rootDir": "src",
+"outDir": "dist",
+"esModuleInterop": true,
+"strict": true
+},
+"include": [
+"src/**/*"
+],
+"exclude": [
+"node_modules",
+"prisma",
+"prisma.config.ts",
+"public"
+]
 }
