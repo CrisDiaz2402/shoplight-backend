@@ -3,14 +3,11 @@
   "version": "1.0.0",
   "description": "Backend para la aplicacion de cloud",
   "main": "index.js",
-  "prisma": {
-    "seed": "ts-node ./prisma/seed.ts"
-  },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "npm run build && npm run migrate:deploy && node dist/server.js",
-    "migrate:deploy": "npx prisma migrate deploy && npx prisma db seed"
+    "migrate:deploy": "npx prisma migrate deploy",
+    "start": "npm run build && npm run migrate:deploy && node dist/server.js"
   },
   "repository": {
     "type": "git",
@@ -25,13 +22,12 @@
   "homepage": "https://github.com/CrisDiaz2402/shoplight-backend#readme",
   "dependencies": {
     "@prisma/client": "^6.18.0",
-    "bcryptjs": "^3.0.3",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "prisma": "^6.18.0",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {

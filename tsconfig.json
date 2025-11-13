@@ -6,5 +6,13 @@
     "outDir": "dist",
     "esModuleInterop": true,
     "strict": true
-  }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "prisma",
+    "prisma.config.ts"
+  ]
 }
