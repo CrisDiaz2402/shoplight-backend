@@ -1,7 +1,9 @@
-import app from "./app";
+// Poner esto PRIMERO
 import dotenv from "dotenv";
-
 dotenv.config();
+
+// Poner los otros imports DESPUÉS
+import app from "./app";
 
 const PORT = process.env.PORT || 3000;
 
