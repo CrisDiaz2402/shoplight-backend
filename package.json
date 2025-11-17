@@ -1,41 +1,43 @@
 {
-"name": "shoplight-backend",
-"version": "1.0.0",
-"description": "Backend para la aplicacion de cloud",
-"main": "index.js",
-"scripts": {
-"dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-"build": "tsc",
-"migrate:deploy": "npx prisma migrate deploy",
-"start": "npm run build && npm run migrate:deploy && node dist/server.js"
-},
-"repository": {
-"type": "git",
-"url": "git+https://github.com/CrisDiaz2402/shoplight-backend.git"
-},
-"keywords": [],
-"author": "",
-"license": "ISC",
-"bugs": {
-"url": "https://github.com/CrisDiaz2402/shoplight-backend/issues"
-},
-"homepage": "https://github.com/CrisDiaz2402/shoplight-backend#readme",
-"dependencies": {
-"@prisma/client": "^6.18.0",
-"bcryptjs": "^3.0.2",
-"cors": "^2.8.5",
-"dotenv": "^17.2.3",
-"express": "^5.1.0",
-"jsonwebtoken": "^9.0.2",
-"path": "^0.12.7",
-"prisma": "^6.18.0",
-"typescript": "^5.9.3",
-"@types/cors": "^2.8.19",
-"@types/express": "^5.0.5",
-"@types/jsonwebtoken": "^9.0.10",
-"@types/node": "^24.9.2"
-},
-"devDependencies": {
-"ts-node-dev": "^2.0.0"
-}
+    "name": "shoplight-backend",
+    "version": "1.0.0",
+    "description": "Backend para la aplicacion de cloud",
+    "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "postinstall": "npx prisma generate",
+    "prestart": "npm run build && npx prisma migrate deploy",
+    "start": "npm run build && npm run migrate:deploy && npx prisma generate && node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "migrate:deploy": "npx prisma migrate deploy"
+  },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/CrisDiaz2402/shoplight-backend.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/CrisDiaz2402/shoplight-backend/issues"
+    },
+    "homepage": "https://github.com/CrisDiaz2402/shoplight-backend#readme",
+    "dependencies": {
+        "@prisma/client": "^6.18.0",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.5",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^24.9.2",
+        "bcryptjs": "^3.0.2",
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "express": "^5.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "path": "^0.12.7",
+        "prisma": "^6.19.0",
+        "typescript": "^5.9.3"
+    },
+    "devDependencies": {
+        "ts-node-dev": "^2.0.0"
+    }
 }

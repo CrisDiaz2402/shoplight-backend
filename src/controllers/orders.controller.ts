@@ -57,7 +57,7 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx: any) => {
       let subtotalTotal = 0;
       const TAX_RATE = 0.15; // 15% IVA
       const orderItemsData: Array<{ productId: number; quantity: number; subtotal: number }> = [];
