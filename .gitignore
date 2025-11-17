@@ -1,5 +1,11 @@
+# Dependencias
 node_modules
-# Keep environment variables out of version control
+
+# Archivo de secretos locales
 .env
 
+# Artefactos de compilación
+/dist
+
+# Cliente Prisma generado (se genera en postinstall)
 /src/generated/prisma

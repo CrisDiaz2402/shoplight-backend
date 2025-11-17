@@ -109,22 +109,32 @@ export const createOrder = async (req: Request, res: Response) => {
       }
 
       // calcular IVA y total
-  const iva = Number((subtotalTotal * TAX_RATE).toFixed(2));
-  const totalWithIva = Number((subtotalTotal + iva).toFixed(2));
-  console.log('createOrder - subtotalTotal, iva, totalWithIva', { subtotalTotal, iva, totalWithIva });
+      const iva = Number((subtotalTotal * TAX_RATE).toFixed(2));
+      const totalWithIva = Number((subtotalTotal + iva).toFixed(2));
+      console.log('createOrder - subtotalTotal, iva, totalWithIva', { subtotalTotal, iva, totalWithIva });
+
+      // ---------> INICIO: CÓDIGO DE DEPURACIÓN <---------
+      // 1. Creamos el objeto de datos en una variable separada
+      const orderData = {
+        userId,
+        subtotal: subtotalTotal,
+        iva: iva,
+        total: totalWithIva,
+        status: "sales",
+        items: {
+          create: orderItemsData.map((oi) => ({ productId: oi.productId, quantity: oi.quantity, subtotal: oi.subtotal })),
+        },
+      };
+
+      // 2. Imprimimos el objeto EXACTO que se va a enviar a Prisma
+      console.log('!!!!!!!!!! OBJETO A PUNTO DE CREARSE EN PRISMA !!!!!!!!!!!');
+      console.log(JSON.stringify(orderData, null, 2));
+      console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+      // ---------> FIN: CÓDIGO DE DEPURACIÓN <---------
 
       const created = await tx.order.create({
         // cast a any para evitar errores de tipos hasta regenerar prisma client
-        data: {
-          userId,
-          subtotal: subtotalTotal,
-          iva: iva,
-          total: totalWithIva,
-          status: "sales",
-          items: {
-            create: orderItemsData.map((oi) => ({ productId: oi.productId, quantity: oi.quantity, subtotal: oi.subtotal })),
-          },
-        } as any,
+        data: orderData as any, // 3. Usamos la variable 'orderData'
         include: { items: true },
       });
 
@@ -160,6 +170,10 @@ export const createOrder = async (req: Request, res: Response) => {
           break;
         case 'P2014':
           message = "Error de relación entre datos. Verifique las referencias.";
+          break;
+        // Capturamos el P2022 específicamente
+        case 'P2022':
+          message = `Error de base de datos: ${err.code}. La columna '${err.meta?.column}' no existe.`;
           break;
         default:
           message = `Error de base de datos: ${err.code}`;

@@ -1,3 +1,16 @@
+# Dependencias que EB instalará
 node_modules
+
+# Archivo de secretos (NUNCA subir)
 .env
+
+# Carpeta de compilación (EB la creará)
 dist
+
+# Archivos de Git (no necesarios en el servidor)
+.git
+.gitignore
+.ebignore
+
+# Opcional (documentación, etc.)
+README.md

@@ -4,7 +4,7 @@ exports.getOrders = exports.createOrder = void 0;
 const prisma_1 = require("../utils/prisma");
 // Crea un pedido, decrementa stock, crea order items y registra ventas (Sale)
 const createOrder = async (req, res) => {
-    var _a;
+    var _a, _b;
     try {
         const userId = (_a = req.user) === null || _a === void 0 ? void 0 : _a.id;
         console.log('createOrder - start');
@@ -100,18 +100,26 @@ const createOrder = async (req, res) => {
             const iva = Number((subtotalTotal * TAX_RATE).toFixed(2));
             const totalWithIva = Number((subtotalTotal + iva).toFixed(2));
             console.log('createOrder - subtotalTotal, iva, totalWithIva', { subtotalTotal, iva, totalWithIva });
+            // ---------> INICIO: CÓDIGO DE DEPURACIÓN <---------
+            // 1. Creamos el objeto de datos en una variable separada
+            const orderData = {
+                userId,
+                subtotal: subtotalTotal,
+                iva: iva,
+                total: totalWithIva,
+                status: "sales",
+                items: {
+                    create: orderItemsData.map((oi) => ({ productId: oi.productId, quantity: oi.quantity, subtotal: oi.subtotal })),
+                },
+            };
+            // 2. Imprimimos el objeto EXACTO que se va a enviar a Prisma
+            console.log('!!!!!!!!!! OBJETO A PUNTO DE CREARSE EN PRISMA !!!!!!!!!!!');
+            console.log(JSON.stringify(orderData, null, 2));
+            console.log('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+            // ---------> FIN: CÓDIGO DE DEPURACIÓN <---------
             const created = await tx.order.create({
                 // cast a any para evitar errores de tipos hasta regenerar prisma client
-                data: {
-                    userId,
-                    subtotal: subtotalTotal,
-                    iva: iva,
-                    total: totalWithIva,
-                    status: "sales",
-                    items: {
-                        create: orderItemsData.map((oi) => ({ productId: oi.productId, quantity: oi.quantity, subtotal: oi.subtotal })),
-                    },
-                },
+                data: orderData, // 3. Usamos la variable 'orderData'
                 include: { items: true },
             });
             return created;
@@ -144,6 +152,10 @@ const createOrder = async (req, res) => {
                     break;
                 case 'P2014':
                     message = "Error de relación entre datos. Verifique las referencias.";
+                    break;
+                // Capturamos el P2022 específicamente
+                case 'P2022':
+                    message = `Error de base de datos: ${err.code}. La columna '${(_b = err.meta) === null || _b === void 0 ? void 0 : _b.column}' no existe.`;
                     break;
                 default:
                     message = `Error de base de datos: ${err.code}`;
