@@ -12,9 +12,49 @@ export const createOrder = async (req: Request, res: Response) => {
     const { items, paymentMethod, paymentDetails } = req.body;
     console.log('createOrder - body items:', Array.isArray(items) ? items.map((i: any) => ({ productId: i.productId, quantity: i.quantity })) : items);
     console.log('createOrder - paymentMethod:', paymentMethod);
-    // items: [{ productId, quantity }]
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "Items son requeridos" });
+    
+    // Validaciones más específicas
+    if (!items) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "El campo 'items' es requerido",
+        details: "No se proporcionó la lista de productos para el pedido"
+      });
+    }
+    
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "El campo 'items' debe ser un arreglo",
+        details: "Los items deben estar en formato de lista/arreglo"
+      });
+    }
+    
+    if (items.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Debe incluir al menos un producto en el pedido",
+        details: "La lista de items está vacía"
+      });
+    }
+    
+    // Validar formato de cada item
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.productId) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `El item ${i + 1} no tiene productId`,
+          details: "Cada item debe tener un productId válido"
+        });
+      }
+      if (!item.quantity) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `El item ${i + 1} no tiene quantity`,
+          details: "Cada item debe tener una cantidad válida"
+        });
+      }
     }
 
     const order = await prisma.$transaction(async (tx) => {
@@ -25,15 +65,26 @@ export const createOrder = async (req: Request, res: Response) => {
       for (const it of items) {
         const productId = Number(it.productId);
         const quantity = Number(it.quantity);
-        if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
-          throw { status: 400, message: `Item inválido: productId y quantity requeridos` };
+        
+        if (!productId || isNaN(productId)) {
+          throw { status: 400, message: `ProductId inválido: '${it.productId}' no es un número válido` };
+        }
+        
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw { status: 400, message: `Cantidad inválida: '${it.quantity}' debe ser un número entero positivo` };
         }
 
         // casteamos a any porque Prisma Client aún puede no estar regenerado localmente
         const product = (await tx.product.findUnique({ where: { id: productId } })) as any;
         console.log(`createOrder - product lookup id=${productId} ->`, product ? { id: product.id, stock: product.stock, price: product.price } : null);
-        if (!product) throw { status: 400, message: `Producto ${productId} no encontrado` };
-        if ((product.stock ?? 0) < quantity) throw { status: 400, message: `Stock insuficiente para producto ${productId}` };
+        
+        if (!product) {
+          throw { status: 400, message: `Producto con ID ${productId} no encontrado. Verifique que el producto exista en el catálogo.` };
+        }
+        
+        if ((product.stock ?? 0) < quantity) {
+          throw { status: 400, message: `Stock insuficiente para el producto '${product.name}' (ID: ${productId}). Stock disponible: ${product.stock ?? 0}, solicitado: ${quantity}` };
+        }
 
         const subtotal = product.price * quantity;
         subtotalTotal += subtotal;
@@ -82,9 +133,66 @@ export const createOrder = async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, message: "Pedido creado correctamente", order });
   } catch (err: any) {
-    if (err?.status && err?.message) return res.status(err.status).json({ success: false, message: err.message });
-    console.error(err);
-    res.status(500).json({ success: false, message: "Error al crear pedido" });
+    // Si es un error customizado que lanzamos en el código
+    if (err?.status && err?.message) {
+      console.error('Error customizado en createOrder:', err.message);
+      return res.status(err.status).json({ 
+        success: false, 
+        message: err.message,
+        details: `Error específico: ${err.message}`
+      });
+    }
+
+    // Si es un error de Prisma
+    if (err?.code) {
+      console.error('Error de Prisma en createOrder:', err);
+      let message = "Error de base de datos";
+      
+      switch (err.code) {
+        case 'P2002':
+          message = "Error de duplicación de datos. Verifique que no existan datos duplicados.";
+          break;
+        case 'P2025':
+          message = "No se encontró el registro especificado en la base de datos.";
+          break;
+        case 'P2003':
+          message = "Error de referencia. Verifique que los datos relacionados existan.";
+          break;
+        case 'P2014':
+          message = "Error de relación entre datos. Verifique las referencias.";
+          break;
+        default:
+          message = `Error de base de datos: ${err.code}`;
+      }
+      
+      return res.status(400).json({ 
+        success: false, 
+        message,
+        details: `Código de error: ${err.code}`,
+        error: err.message || 'Error de base de datos'
+      });
+    }
+
+    // Error de validación o parsing
+    if (err?.name === 'ValidationError' || err?.name === 'TypeError') {
+      console.error('Error de validación en createOrder:', err.message);
+      return res.status(400).json({ 
+        success: false, 
+        message: "Error en los datos proporcionados",
+        details: err.message,
+        error: "Verifique que todos los campos requeridos estén presentes y sean válidos"
+      });
+    }
+
+    // Error genérico con más detalles
+    console.error('Error no manejado en createOrder:', err);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Error interno del servidor al crear el pedido",
+      details: err?.message || "Error desconocido",
+      error: "Por favor, contacte al administrador si el problema persiste",
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
@@ -95,8 +203,21 @@ export const getOrders = async (req: Request, res: Response) => {
 
     const orders = await prisma.order.findMany({ where: { userId }, include: { items: true } });
     res.json(orders);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error al obtener pedidos" });
+  } catch (err: any) {
+    console.error('Error en getOrders:', err);
+    
+    // Si es un error de Prisma
+    if (err?.code) {
+      return res.status(400).json({ 
+        error: "Error de base de datos al obtener pedidos",
+        details: err.message || `Código de error: ${err.code}`
+      });
+    }
+
+    res.status(500).json({ 
+      error: "Error interno del servidor al obtener pedidos",
+      details: err?.message || "Error desconocido",
+      timestamp: new Date().toISOString()
+    });
   }
 };
