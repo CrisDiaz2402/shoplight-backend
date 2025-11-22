@@ -1,0 +1,12 @@
+{
+  "AWSEBDockerrunVersion": "1",
+  "Image": {
+    "Name": "771666995130.dkr.ecr.us-east-1.amazonaws.com/shoplight:latest",
+    "Update": "true"
+  },
+  "Ports": [
+    {
+      "ContainerPort": 3000
+    }
+  ]
+}
