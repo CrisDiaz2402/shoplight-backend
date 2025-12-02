@@ -1,25 +1,49 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log("🌱 Iniciando el Seed...");
+
+  // ==========================================
+  // 1. CREACIÓN DEL ADMIN
+  // ==========================================
+  const adminPassword = await bcrypt.hash("admin", 10);
+  
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@shoplight.com" }, // Email ficticio para el admin
+    update: {}, // Si existe, no hacemos cambios
+    create: {
+      email: "admin@shoplight.com",
+      name: "admin",
+      password: adminPassword,
+      role: Role.admin, // <--- AQUÍ ASIGNAMOS EL ROL DE ADMIN
+    },
+  });
+  console.log("👤 Admin garantizado:", { id: admin.id, email: admin.email, role: admin.role });
+
+  // ==========================================
+  // 2. CREACIÓN DE USUARIO CLIENTE (usuario1)
+  // ==========================================
   const email = "usuario1@gmail.com";
   const password = "usuario1";
   const name = "usuario1";
 
   const hashed = await bcrypt.hash(password, 10);
 
-  // upsert para que el seed sea idempotente (usuario)
+  // Al no especificar 'role', Prisma usará el @default(client) definido en el schema
   const user = await prisma.user.upsert({
     where: { email },
     update: { name, password: hashed },
     create: { email, name, password: hashed },
   });
 
-  console.log("Seed: usuario creado/actualizado:", { id: user.id, email: user.email });
+  console.log("👤 Usuario cliente garantizado:", { id: user.id, email: user.email, role: user.role });
 
-  // Crear 2 categorías si no existen (idempotente, usa name como unique)
+  // ==========================================
+  // 3. CATEGORÍAS
+  // ==========================================
   const categories = [
     { name: "Iluminación", description: "Lámparas y accesorios de iluminación" },
     { name: "Electrónica", description: "Dispositivos electrónicos y accesorios" },
@@ -31,7 +55,7 @@ async function main() {
       update: { description: cat.description },
       create: { name: cat.name, description: cat.description },
     });
-    console.log("Seed: categoría creada/actualizada:", { id: c.id, name: c.name });
+    console.log("📦 Categoría:", { id: c.id, name: c.name });
   }
 
   // Mapear categorías por nombre a su id para asignarlas a los productos
@@ -41,12 +65,14 @@ async function main() {
     if (found) categoryMap[cat.name] = found.id;
   }
 
-  // Productos iniciales (idempotente usando upsert por name)
+  // ==========================================
+  // 4. PRODUCTOS
+  // ==========================================
   const products = [
     {
       name: 'Laptop Pro 15"',
       stock: 12,
-      categoryName: 'Iluminación',
+      categoryName: 'Iluminación', // Nota: Quizás debería ser Electrónica, pero mantengo tu data
       description: 'Potente laptop para profesionales con procesador de última generación',
       price: 1299.99,
       imageUrl: 'https://res.cloudinary.com/dlezkbbxn/image/upload/v1762117963/laptop_af16gp.jpg',
@@ -111,7 +137,10 @@ async function main() {
 
   for (const p of products) {
     const categoryId = p.categoryName ? categoryMap[p.categoryName] ?? null : null;
+    
+    // Buscamos si existe por nombre (ya que name no es @unique en tu schema actual)
     const existing = await prisma.product.findFirst({ where: { name: p.name } });
+    
     let prod;
     if (existing) {
       prod = await prisma.product.update({
@@ -136,8 +165,10 @@ async function main() {
         },
       });
     }
-    console.log('Seed: producto creado/actualizado:', { id: prod.id, name: prod.name });
+    console.log(' Producto procesado:', { id: prod.id, name: prod.name });
   }
+
+  console.log("Seed completado correctamente.");
 }
 
 main()

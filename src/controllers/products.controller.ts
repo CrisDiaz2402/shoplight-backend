@@ -36,3 +36,50 @@ export const createProduct = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Error al crear producto" });
   }
 };
+
+export const updateProduct = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price, imageUrl, stock, categoryId } = req.body;
+    
+    const updateData: any = {};
+    if (name) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (price != null) updateData.price = Number(price);
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (stock != null) updateData.stock = Number(stock);
+    if (categoryId !== undefined) updateData.categoryId = categoryId ? Number(categoryId) : null;
+    
+    const product = await prisma.product.update({
+      where: { id: Number(id) },
+      data: updateData,
+      include: { category: true } as any,
+    }) as any;
+    
+    res.json(product);
+  } catch (err: any) {
+    console.error(err);
+    if (err?.code === "P2025") {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.status(500).json({ error: "Error al actualizar producto", details: err?.message });
+  }
+};
+
+export const deleteProduct = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.product.delete({
+      where: { id: Number(id) },
+    });
+    
+    res.json({ success: true, message: "Producto eliminado correctamente" });
+  } catch (err: any) {
+    console.error(err);
+    if (err?.code === "P2025") {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+    res.status(500).json({ error: "Error al eliminar producto", details: err?.message });
+  }
+};

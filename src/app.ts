@@ -4,6 +4,7 @@ import path from "path"; // 1. Importa el módulo 'path' de Node.js
 import { authRouter } from "./routes/auth.routes";
 import { productsRouter } from "./routes/products.routes";
 import { ordersRouter } from "./routes/orders.routes";
+import { categoriesRouter } from "./routes/categories.routes";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use(express.static(publicPath));
 app.use("/auth", authRouter);
 app.use("/products", productsRouter);
 app.use("/orders", ordersRouter);
+app.use("/categories", categoriesRouter);
 
 // 5. "Catch-all" para la SPA (Single Page Application)
 // Esto es crucial para que Vue Router funcione.
