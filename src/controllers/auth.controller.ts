@@ -95,3 +95,30 @@ export const deleteUser = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "Error al eliminar usuario" });
   }
 };
+
+// Listar usuarios (soporta ?role=admin para filtrar)
+export const getUsers = async (req: Request, res: Response) => {
+  try {
+    const role = req.query.role as string | undefined;
+    const where: any = {};
+    if (role) where.role = role;
+
+    const users = await prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json(users);
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Error al obtener usuarios" });
+  }
+};
