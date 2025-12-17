@@ -347,12 +347,22 @@ npm start
 ---
 
 
+Produccion:
+    "scripts": {
+        "build": "tsc",
+        "postinstall": "npx prisma generate",
+        "prestart": "npm run build && npx prisma migrate deploy && npx prisma db seed",
+        "start": "node dist/server.js",
+        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+        "migrate:deploy": "npx prisma migrate deploy"
+   },
 
-    // "scripts": {
-    //     "build": "tsc",
-    //     "postinstall": "npx prisma generate",
-    //     "prestart": "npm run build && npx prisma migrate deploy && npx prisma db seed",
-    //     "start": "node dist/server.js",
-    //     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    //     "migrate:deploy": "npx prisma migrate deploy"
-    // },
+Desarrollo:
+    "scripts": {
+        "build": "tsc",
+        "postinstall": "npx prisma generate",
+        "prestart": "npm run build && npx prisma migrate deploy && npx prisma db seed",
+        "start": "node dist/server.js",
+        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+        "migrate:deploy": "npx prisma migrate deploy"
+    },

@@ -13,7 +13,7 @@
         "start": "node dist/server.js",
         "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
         "migrate:deploy": "npx prisma migrate deploy"
-    },
+   },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/CrisDiaz2402/shoplight-backend.git"
