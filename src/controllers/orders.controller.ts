@@ -1,7 +1,13 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { notificarVentaAdmin } from "../services/notification.service";  // Servicio SNS (Alertas)
-import { registrarAuditoriaVenta } from "../utils/dynamo"; // <--- 1. IMPORTACIÓN NUEVA (DynamoDB)
+import { notificarVentaAdmin } from "../services/notification.service";  // Servicio SNS (Alertas)
+import { registrarAuditoriaVenta } from "../utils/dynamo"; // Servicio DynamoDB (Auditoría)
+// 1. IMPORTACIÓN DE SQS
+import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
+
+// 2. INICIALIZAR EL CLIENTE SQS
+// Tomará las credenciales automáticamente del entorno (igual que SNS y Dynamo)
+const sqsClient = new SQSClient({ region: "us-east-1" });
 
 // Crea un pedido, decrementa stock, crea order items y registra ventas (Sale)
 export const createOrder = async (req: Request, res: Response) => {
@@ -113,9 +119,31 @@ export const createOrder = async (req: Request, res: Response) => {
     // 2. Notificar al Administrador (Amazon SNS)
     notificarVentaAdmin(order.id, Number(order.total), items.length);
 
-    // 3. Registrar Log de Auditoría (Amazon DynamoDB) <--- IMPLEMENTACIÓN DYNAMO
-    // Esto guardará un registro JSON inmutable en la nube
+    // 3. Registrar Log de Auditoría (Amazon DynamoDB)
     registrarAuditoriaVenta(userId, order.id, Number(order.total));
+
+    // 4. DESACOPLAMIENTO DE PROCESAMIENTO (Amazon SQS) <--- IMPLEMENTACIÓN SQS
+    // Enviamos un mensaje a la cola para que otros sistemas (facturación, logística) lo procesen después.
+    try {
+      if (process.env.SQS_QUEUE_URL) {
+        await sqsClient.send(new SendMessageCommand({
+          QueueUrl: process.env.SQS_QUEUE_URL,
+          MessageBody: JSON.stringify({
+            event: "ORDER_CREATED",
+            orderId: order.id,
+            userId: userId,
+            total: order.total,
+            timestamp: new Date().toISOString()
+          })
+        }));
+        console.log(`[SQS] Mensaje enviado correctamente para orden #${order.id}`);
+      } else {
+        console.warn("[SQS] Variable SQS_QUEUE_URL no definida en .env");
+      }
+    } catch (sqsError) {
+      // Importante: Si falla la cola, NO cancelamos la venta. Solo registramos el error.
+      console.error("Error enviando mensaje a SQS:", sqsError);
+    }
 
     res.status(201).json({ success: true, message: "Pedido creado correctamente", order });
 
