@@ -27,6 +27,7 @@
     "homepage": "https://github.com/CrisDiaz2402/shoplight-backend#readme",
     "dependencies": {
         "@aws-sdk/client-s3": "^3.953.0",
+        "@aws-sdk/client-sns": "^3.953.0",
         "@aws-sdk/s3-request-presigner": "^3.953.0",
         "@prisma/client": "^6.18.0",
         "@types/cors": "^2.8.19",

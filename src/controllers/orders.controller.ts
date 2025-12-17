@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
+import { notificarVentaAdmin } from "../services/notification.service"; // <--- 1. IMPORTACIÓN NUEVA
 
 // Crea un pedido, decrementa stock, crea order items y registra ventas (Sale)
 export const createOrder = async (req: Request, res: Response) => {
@@ -104,6 +105,11 @@ export const createOrder = async (req: Request, res: Response) => {
 
       return created;
     });
+
+    // --- 2. IMPLEMENTACIÓN SNS: NOTIFICAR AL ADMIN ---
+    // Llamamos a la función de notificación fuera de la transacción para no bloquear
+    // Si falla el envío del correo, no reversamos la venta.
+    notificarVentaAdmin(order.id, Number(order.total), items.length);
 
     res.status(201).json({ success: true, message: "Pedido creado correctamente", order });
   } catch (err: any) {
