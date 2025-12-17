@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { notificarVentaAdmin } from "../services/notification.service"; // <--- 1. IMPORTACIÓN NUEVA
+import { notificarVentaAdmin } from "../services/notification.service";  // Servicio SNS (Alertas)
+import { registrarAuditoriaVenta } from "../utils/dynamo"; // <--- 1. IMPORTACIÓN NUEVA (DynamoDB)
 
 // Crea un pedido, decrementa stock, crea order items y registra ventas (Sale)
 export const createOrder = async (req: Request, res: Response) => {
@@ -31,6 +32,7 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
+    // --- TRANSACCIÓN DE BASE DE DATOS (PostgreSQL) ---
     const order = await prisma.$transaction(async (tx: any) => {
       let subtotalTotal = 0;
       const TAX_RATE = 0.15; // 15% IVA
@@ -106,12 +108,17 @@ export const createOrder = async (req: Request, res: Response) => {
       return created;
     });
 
-    // --- 2. IMPLEMENTACIÓN SNS: NOTIFICAR AL ADMIN ---
-    // Llamamos a la función de notificación fuera de la transacción para no bloquear
-    // Si falla el envío del correo, no reversamos la venta.
+    // --- SERVICIOS AWS ADICIONALES (Se ejecutan tras el éxito de la BD) ---
+
+    // 2. Notificar al Administrador (Amazon SNS)
     notificarVentaAdmin(order.id, Number(order.total), items.length);
 
+    // 3. Registrar Log de Auditoría (Amazon DynamoDB) <--- IMPLEMENTACIÓN DYNAMO
+    // Esto guardará un registro JSON inmutable en la nube
+    registrarAuditoriaVenta(userId, order.id, Number(order.total));
+
     res.status(201).json({ success: true, message: "Pedido creado correctamente", order });
+
   } catch (err: any) {
     console.error('Error en createOrder:', err);
     
@@ -135,16 +142,12 @@ export const getOrders = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     if (!userId) return res.status(401).json({ error: "No autorizado" });
 
-    // MODIFICACIÓN CLAVE AQUÍ:
     const orders = await prisma.order.findMany({
       where: { userId },
-      // 1. Ordenar por fecha descendente (más reciente primero)
       orderBy: { createdAt: 'desc' }, 
       include: {
         items: {
           include: {
-            // 2. Incluir los detalles del producto (nombre, imagen, etc.)
-            // Esto es lo que permite mostrar la info completa en el historial del frontend
             product: true 
           }
         }
