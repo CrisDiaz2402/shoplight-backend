@@ -5,8 +5,10 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 // Importamos Rekognition para la IA
 import { RekognitionClient, DetectLabelsCommand } from "@aws-sdk/client-rekognition";
+// --- NUEVA LIBRERÍA DE TRADUCCIÓN ---
+import { translate } from 'google-translate-api-x';
 
-// --- 1. CONFIGURACIÓN DEL CLIENTE S3 ---
+// --- 1. CONFIGURACIÓN DEL CLIENTE S3 --- [cite: 120]
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
   credentials: {
@@ -16,7 +18,7 @@ const s3Client = new S3Client({
   },
 });
 
-// --- 2. CONFIGURACIÓN DEL CLIENTE REKOGNITION ---
+// --- 2. CONFIGURACIÓN DEL CLIENTE REKOGNITION --- [cite: 121]
 const rekognition = new RekognitionClient({
   region: process.env.AWS_REGION || "us-east-1",
   credentials: {
@@ -26,22 +28,19 @@ const rekognition = new RekognitionClient({
   },
 });
 
-// --- 3. FUNCIÓN AUXILIAR PARA FIRMAR URLS ---
+// --- 3. FUNCIÓN AUXILIAR PARA FIRMAR URLS --- [cite: 123]
 const procesarImagenUrl = async (imageUrl: string | null | undefined) => {
   if (!imageUrl) return null;
 
-  // Si ya es un link completo (ej: Cloudinary o una imagen de internet), no hacemos nada
   if (imageUrl.startsWith("http") || imageUrl.startsWith("https")) {
     return imageUrl;
   }
 
-  // Si no empieza con http, asumimos que es un KEY de S3
   try {
     const command = new GetObjectCommand({
-      Bucket: process.env.S3_BUCKET_NAME, // Asegúrate de tener esto en tu .env
+      Bucket: process.env.S3_BUCKET_NAME,
       Key: imageUrl,
     });
-    // Generamos una URL temporal válida por 1 hora
     const urlFirmada = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
     return urlFirmada;
   } catch (error) {
@@ -54,10 +53,31 @@ const procesarImagenUrl = async (imageUrl: string | null | undefined) => {
 
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const productsRaw = (await prisma.product.findMany({
-      include: { /* @ts-ignore */ category: true } as any,
-      orderBy: { createdAt: 'desc' },
-    })) as any[];
+    const { search } = req.query;
+    let productsRaw: any[];
+
+    if (search) {
+      const query = `%${String(search).trim()}%`;
+      
+      // SQL Nativo para búsqueda parcial en arreglos de PostgreSQL
+      // El operador ILIKE busca coincidencias parciales sin importar mayúsculas
+      productsRaw = await prisma.$queryRaw`
+        SELECT p.* FROM "Product" p
+        WHERE p.name ILIKE ${query}
+           OR p.description ILIKE ${query}
+           OR EXISTS (
+              SELECT 1 FROM unnest(p."aiTags") AS tag 
+              WHERE tag ILIKE ${query}
+           )
+        ORDER BY p."createdAt" DESC
+      `;
+    } else {
+      // Si no hay búsqueda, usamos findMany estándar [cite: 130]
+      productsRaw = (await prisma.product.findMany({
+        include: { /* @ts-ignore */ category: true } as any,
+        orderBy: { createdAt: 'desc' },
+      })) as any[];
+    }
 
     const productsProcessed = await Promise.all(
       productsRaw.map(async (prod) => {
@@ -70,7 +90,7 @@ export const getProducts = async (req: Request, res: Response) => {
 
     res.json(productsProcessed);
   } catch (error) {
-    console.error(error);
+    console.error("Error en getProducts:", error);
     res.status(500).json({ error: "Error obteniendo productos" });
   }
 };
@@ -86,7 +106,6 @@ export const getProduct = async (req: Request, res: Response) => {
     if (!product) return res.status(404).json({ error: "Producto no encontrado" });
 
     product.imageUrl = await procesarImagenUrl(product.imageUrl);
-
     res.json(product);
   } catch (error) {
     console.error(error);
@@ -96,7 +115,6 @@ export const getProduct = async (req: Request, res: Response) => {
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    // imageUrl aquí es el KEY de S3 (ej: "zapatos/nike.jpg")
     const { name, description, price, imageUrl, stock, categoryId } = req.body;
 
     if (!name || price == null) {
@@ -105,56 +123,62 @@ export const createProduct = async (req: Request, res: Response) => {
 
     let detectedTags: string[] = [];
 
-    // --- INTEGRACIÓN REKOGNITION (IA) ---
-    // Si tenemos una imagen (Key de S3), la analizamos antes de guardar
+    // --- INTEGRACIÓN REKOGNITION (IA) --- [cite: 140, 141]
     if (imageUrl && !imageUrl.startsWith("http")) {
        console.log(`[Rekognition] Iniciando análisis para: ${imageUrl}`);
        
        try {
          const command = new DetectLabelsCommand({
-           Image: {
-             S3Object: {
-               Bucket: process.env.S3_BUCKET_NAME,
-               Name: imageUrl // El Key del archivo en S3
-             }
-           },
-           MaxLabels: 5,     // Top 5 etiquetas
-           MinConfidence: 80 // Confianza mínima 80%
+           Image: { S3Object: { Bucket: process.env.S3_BUCKET_NAME, Name: imageUrl } },
+           MaxLabels: 5,
+           MinConfidence: 80
          });
 
          const response = await rekognition.send(command);
-         
-         // Extraemos los nombres de las etiquetas
-         detectedTags = response.Labels?.map(label => label.Name || "") || [];
-         console.log(`[Rekognition] Etiquetas encontradas: ${detectedTags.join(", ")}`);
+         const englishTags = response.Labels?.map(label => label.Name || "") || [];
+         console.log(`[Rekognition] Etiquetas originales (EN): ${englishTags.join(", ")}`);
+
+         // --- TRADUCCIÓN DE ETIQUETAS (Google Translate) --- [cite: 143, 144]
+         if (englishTags.length > 0) {
+            try {
+                const resTranslate = await translate(englishTags.join(", "), { 
+                    from: 'en', 
+                    to: 'es' 
+                });
+                
+                detectedTags = resTranslate.text.split(",").map(t => t.trim());
+                console.log(`[Translate] Éxito: ${detectedTags.join(", ")}`);
+            } catch (transError) {
+                console.error("❌ [Google Translate] Error, usando inglés como fallback:", transError);
+                detectedTags = englishTags;
+            }
+         }
 
        } catch (rekError) {
-         console.error("[Rekognition] Error al analizar imagen (continuando sin tags):", rekError);
-         // No fallamos la request completa si la IA falla, solo logueamos el error
+         console.error("❌ [Rekognition] Error al analizar imagen:", rekError);
        }
     }
 
     const stockValue = Number.isInteger(stock) ? stock : 0;
     
-    // Preparar objeto de datos para Prisma
-    const data: any = { 
+    console.log("==========================================");
+    console.log("🛠️  VERIFICACIÓN PREVIA A GUARDADO BD 🛠️");
+    console.log(`📦 Producto: ${name}`);
+    console.log(`🏷️  Etiquetas Finales (aiTags):`, detectedTags);
+    console.log("==========================================");
+    
+    const product = await prisma.product.create({
+      data: { 
         name, 
-        description: description || "", // Descripción original limpia
+        description: description || "",
         price: Number(price), 
         imageUrl, 
         stock: stockValue,
-        // Guardamos los tags en su propia columna (Array de Strings)
-        // Si no hay tags, guardamos array vacío []
-        aiTags: detectedTags 
-    };
-
-    if (categoryId != null) data.categoryId = Number(categoryId);
-
-    const product = await prisma.product.create({
-      data: data as any,
+        aiTags: detectedTags,
+        categoryId: categoryId ? Number(categoryId) : null
+      } as any,
     });
 
-    // Devolvemos el producto completo (Prisma ya incluye 'aiTags' en el objeto 'product')
     res.status(201).json(product);
 
   } catch (err) {
@@ -172,10 +196,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     if (name) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (price != null) updateData.price = Number(price);
-    
-    // Si actualizan la imagen, guardamos el nuevo Key
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-    
     if (stock != null) updateData.stock = Number(stock);
     if (categoryId !== undefined) updateData.categoryId = categoryId ? Number(categoryId) : null;
 
@@ -186,13 +207,10 @@ export const updateProduct = async (req: Request, res: Response) => {
     }) as any;
 
     product.imageUrl = await procesarImagenUrl(product.imageUrl);
-
     res.json(product);
   } catch (err: any) {
     console.error(err);
-    if (err?.code === "P2025") {
-      return res.status(404).json({ error: "Producto no encontrado" });
-    }
+    if (err?.code === "P2025") return res.status(404).json({ error: "Producto no encontrado" });
     res.status(500).json({ error: "Error al actualizar producto", details: err?.message });
   }
 };
@@ -200,16 +218,11 @@ export const updateProduct = async (req: Request, res: Response) => {
 export const deleteProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await prisma.product.delete({
-      where: { id: Number(id) },
-    });
-
+    await prisma.product.delete({ where: { id: Number(id) } });
     res.json({ success: true, message: "Producto eliminado correctamente" });
   } catch (err: any) {
     console.error(err);
-    if (err?.code === "P2025") {
-      return res.status(404).json({ error: "Producto no encontrado" });
-    }
+    if (err?.code === "P2025") return res.status(404).json({ error: "Producto no encontrado" });
     res.status(500).json({ error: "Error al eliminar producto", details: err?.message });
   }
 };
