@@ -10,37 +10,38 @@ const snsClient = new SNSClient({
   },
 });
 
-// 2. Función para notificar nueva venta
-export const notificarVentaAdmin = async (orderId: number, total: number, itemsCount: number) => {
+// 2. Función para notificar Stock Bajo (Reemplaza a la notificación de venta)
+export const notificarStockBajo = async (productName: string, currentStock: number) => {
   try {
     const topicArn = process.env.SNS_TOPIC_ARN;
+    
     if (!topicArn) {
       console.warn("SNS_TOPIC_ARN no está configurado. No se envió alerta.");
       return;
     }
 
-    // Mensaje que le llegará al admin
+    // Mensaje de alerta crítica de inventario
     const mensaje = `
- ¡Nueva Venta en ShopLight!
- Total: $${total}
- Items: ${itemsCount}
- Orden ID: #${orderId}
+ ⚠️ ALERTA DE STOCK BAJO ⚠️
+ 
+ El producto "${productName}" ha alcanzado un nivel crítico de inventario.
+ Stock actual: ${currentStock} unidades.
 
-Revisa el panel administrativo para más detalles.
+ Se requiere reabastecimiento inmediato.
     `;
 
     const params = {
       Message: mensaje,
-      Subject: "Alerta de Venta - ShopLight",
+      Subject: `Alerta: Stock Bajo - ${productName}`, // Asunto claro para el correo
       TopicArn: topicArn,
     };
 
     const command = new PublishCommand(params);
     await snsClient.send(command);
     
-    console.log(`Alerta SNS enviada por Orden #${orderId}`);
+    console.log(`✅ [SNS] Alerta de stock bajo enviada para: ${productName}`);
+
   } catch (error) {
-    console.error("Error enviando alerta SNS:", error);
-    // No lanzamos el error para no interrumpir la venta si falla la notificación
+    console.error("❌ Error enviando alerta SNS:", error);
   }
 };

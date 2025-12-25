@@ -1,12 +1,11 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { notificarVentaAdmin } from "../services/notification.service";  // Servicio SNS (Alertas)
+// Modificación: Importamos la nueva función de alerta de stock
+import { notificarStockBajo } from "../services/notification.service"; 
 import { registrarAuditoriaVenta } from "../utils/dynamo"; // Servicio DynamoDB (Auditoría)
-// 1. IMPORTACIÓN DE SQS
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
 // 2. INICIALIZAR EL CLIENTE SQS
-// Tomará las credenciales automáticamente del entorno (igual que SNS y Dynamo)
 const sqsClient = new SQSClient({ region: "us-east-1" });
 
 // Crea un pedido, decrementa stock, crea order items y registra ventas (Sale)
@@ -38,6 +37,10 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
+    // Array para guardar productos que necesitan alerta de stock
+    // (Lo llenaremos dentro de la transacción, pero lo procesaremos fuera)
+    let productosConStockBajo: { name: string; stock: number }[] = [];
+
     // --- TRANSACCIÓN DE BASE DE DATOS (PostgreSQL) ---
     const order = await prisma.$transaction(async (tx: any) => {
       let subtotalTotal = 0;
@@ -67,13 +70,22 @@ export const createOrder = async (req: Request, res: Response) => {
         subtotalTotal += subtotal;
         orderItemsData.push({ productId, quantity, subtotal });
 
-        // 1. Decrementar stock
-        await tx.product.update({ 
+        // 1. Decrementar stock y obtener el producto actualizado
+        const updatedProduct = await tx.product.update({ 
             where: { id: productId }, 
             data: { stock: (product.stock ?? 0) - quantity } as any 
         });
 
-        // 2. Registrar en Sale (Kardex)
+        // 2. VERIFICACIÓN DE ALERTA (<= 3 unidades)
+        // Guardamos en la lista temporal para enviar la alerta SOLO si la transacción termina bien
+        if ((updatedProduct.stock ?? 0) <= 3) {
+            productosConStockBajo.push({
+                name: updatedProduct.name,
+                stock: updatedProduct.stock ?? 0
+            });
+        }
+
+        // 3. Registrar en Sale (Kardex)
         await (tx as any).sale.create({
           data: {
             userId,
@@ -90,7 +102,7 @@ export const createOrder = async (req: Request, res: Response) => {
       const iva = Number((subtotalTotal * TAX_RATE).toFixed(2));
       const totalWithIva = Number((subtotalTotal + iva).toFixed(2));
 
-      // 3. Crear la Orden con sus Items
+      // 4. Crear la Orden con sus Items
       const orderData = {
         userId,
         subtotal: subtotalTotal,
@@ -116,14 +128,20 @@ export const createOrder = async (req: Request, res: Response) => {
 
     // --- SERVICIOS AWS ADICIONALES (Se ejecutan tras el éxito de la BD) ---
 
-    // 2. Notificar al Administrador (Amazon SNS)
-    notificarVentaAdmin(order.id, Number(order.total), items.length);
+    // 2. ALERTAS SNS: Procesar alertas de stock bajo si las hubo
+    // Ya NO enviamos alerta por cada venta, solo si el stock es crítico.
+    if (productosConStockBajo.length > 0) {
+        console.log(`[SNS] Se detectaron ${productosConStockBajo.length} productos con stock bajo. Enviando alertas...`);
+        // Usamos Promise.all para enviar alertas en paralelo sin bloquear demasiado
+        await Promise.all(
+            productosConStockBajo.map(p => notificarStockBajo(p.name, p.stock))
+        );
+    }
 
     // 3. Registrar Log de Auditoría (Amazon DynamoDB)
     registrarAuditoriaVenta(userId, order.id, Number(order.total));
 
-    // 4. DESACOPLAMIENTO DE PROCESAMIENTO (Amazon SQS) <--- IMPLEMENTACIÓN SQS
-    // Enviamos un mensaje a la cola para que otros sistemas (facturación, logística) lo procesen después.
+    // 4. DESACOPLAMIENTO DE PROCESAMIENTO (Amazon SQS)
     try {
       if (process.env.SQS_QUEUE_URL) {
         await sqsClient.send(new SendMessageCommand({
@@ -141,7 +159,6 @@ export const createOrder = async (req: Request, res: Response) => {
         console.warn("[SQS] Variable SQS_QUEUE_URL no definida en .env");
       }
     } catch (sqsError) {
-      // Importante: Si falla la cola, NO cancelamos la venta. Solo registramos el error.
       console.error("Error enviando mensaje a SQS:", sqsError);
     }
 
