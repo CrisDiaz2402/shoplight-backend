@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+// Importamos la función que lee la tabla de DynamoDB
+import { obtenerLogsAuditoria } from "../utils/dynamo"; 
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -120,5 +122,26 @@ export const getUsers = async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ success: false, message: "Error al obtener usuarios" });
+  }
+};
+
+// --- NUEVO ENDPOINT PARA AUDITORÍA (DynamoDB) ---
+export const getAuditLogs = async (req: Request, res: Response) => {
+  try {
+    // Llamamos a la función de scan que creamos en dynamo.ts
+    const logs = await obtenerLogsAuditoria();
+    
+    res.json({
+      success: true,
+      count: logs.length,
+      data: logs
+    });
+  } catch (err: any) {
+    console.error("Error en getAuditLogs:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Error al obtener historial de auditoría",
+      details: err?.message 
+    });
   }
 };
